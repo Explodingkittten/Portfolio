@@ -1,0 +1,72 @@
+-- Place this in a LocalScript
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+-- Get your TextLabel (adjust the path to match your GUI structure)
+local textLabel = script.Parent
+
+-- Pre-made sentence
+local fullSentence = "Give me money or I sell ALL of your personal information muahhahahahaha"
+local currentIndex = 0
+
+-- Visual feedback settings
+local normalColor = Color3.new(0, 0, 0) -- black
+local highlightColor = Color3.new(0.203922, 0.203922, 0.203922) -- grey
+
+
+-- Initialize
+textLabel.Text = ""
+textLabel.TextColor3 = normalColor
+
+local function flashText()
+	-- Create a quick color flash when a key is pressed
+	local flashTween = TweenService:Create(
+		textLabel,
+		TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{TextColor3 = highlightColor}
+	)
+
+	local returnTween = TweenService:Create(
+		textLabel,
+		TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{TextColor3 = normalColor}
+	)
+
+	flashTween:Play()
+	flashTween.Completed:Connect(function()
+		returnTween:Play()
+	end)
+end
+
+local function onKeyPressed(input, gameProcessed)
+	if gameProcessed then
+		return
+	end
+
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		if script.Parent.Parent.Visible == true then
+	
+		if currentIndex < string.len(fullSentence) then
+			currentIndex = currentIndex + 1
+			textLabel.Text = string.sub(fullSentence, 1, currentIndex)
+
+			-- Visual feedback
+			flashText()
+
+			-- Show progress
+			local progress = math.floor((currentIndex / string.len(fullSentence)) * 100)
+			print("Progress: " .. progress .. "% (" .. currentIndex .. "/" .. string.len(fullSentence) .. ")")
+
+			-- Check if completed
+			if currentIndex >= string.len(fullSentence) then
+				print("Sentence Completed")
+				script.Parent.Parent.Send.Visible = true
+				
+					game:GetService("ReplicatedStorage").VariableValues:WaitForChild("SentenceComplete").Value = true
+			end
+		end
+		end
+	end
+end
+
+UserInputService.InputBegan:Connect(onKeyPressed)
