@@ -1,8 +1,6 @@
--- Place this in a LocalScript
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
--- Get your TextLabel (adjust the path to match your GUI structure)
 local textLabel = script.Parent
 
 -- Pre-made sentence
