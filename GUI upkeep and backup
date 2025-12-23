@@ -1,0 +1,308 @@
+-- LOCAL SCRIPT - Place this in the CreatureInventoryGui ScreenGui
+local player = game.Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Remove any duplicate GUIs
+local existingGuis = playerGui:GetChildren()
+for _, gui in pairs(existingGuis) do
+	if gui.Name == "CreatureInventoryGui" and gui ~= script.Parent then
+		warn("Removing duplicate CreatureInventoryGui!")
+		gui:Destroy()
+	end
+end
+
+local screenGui = script.Parent
+
+-- Make sure this GUI doesn't reset on spawn
+screenGui.ResetOnSpawn = false
+
+-- Get existing GUI elements
+local hotbarFrame = screenGui:WaitForChild("HotbarFrame")
+local infoFrame = screenGui:WaitForChild("InfoFrame")
+local infoScroll = infoFrame:WaitForChild("ScrollingFrame") or infoFrame:FindFirstChildOfClass("ScrollingFrame")
+
+-- Get the 5 slots
+local slots = {}
+local selectedSlot = nil
+
+for i = 1, 5 do
+	local slotFrame = hotbarFrame:WaitForChild("Slot" .. i)
+	local nameLabel = slotFrame:FindFirstChild("NameLabel")
+	local countLabel = slotFrame:FindFirstChild("CountLabel")
+
+	-- If labels don't exist, create them
+	if not nameLabel then
+		nameLabel = Instance.new("TextLabel")
+		nameLabel.Name = "NameLabel"
+		nameLabel.Size = UDim2.new(1, 0, 0.6, 0)
+		nameLabel.BackgroundTransparency = 1
+		nameLabel.Text = ""
+		nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		nameLabel.TextSize = 14
+		nameLabel.Font = Enum.Font.GothamBold
+		nameLabel.TextWrapped = true
+		nameLabel.Parent = slotFrame
+	end
+
+	if not countLabel then
+		countLabel = Instance.new("TextLabel")
+		countLabel.Name = "CountLabel"
+		countLabel.Size = UDim2.new(1, 0, 0.4, 0)
+		countLabel.Position = UDim2.new(0, 0, 0.6, 0)
+		countLabel.BackgroundTransparency = 1
+		countLabel.Text = ""
+		countLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+		countLabel.TextSize = 18
+		countLabel.Font = Enum.Font.GothamBold
+		countLabel.Parent = slotFrame
+	end
+
+	-- Find or create button
+	local button = slotFrame:FindFirstChildOfClass("TextButton")
+	if not button then
+		button = Instance.new("TextButton")
+		button.Size = UDim2.new(1, 0, 1, 0)
+		button.BackgroundTransparency = 1
+		button.Text = ""
+		button.Parent = slotFrame
+	end
+
+	slots[i] = {
+		frame = slotFrame,
+		nameLabel = nameLabel,
+		countLabel = countLabel,
+		button = button,
+		creatureName = nil,
+		count = 0
+	}
+end
+
+-- Setup click handlers for slots
+for i, slot in pairs(slots) do
+	slot.button.MouseButton1Click:Connect(function()
+		-- Deselect all
+		for _, s in pairs(slots) do
+			s.frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+			s.frame.BorderColor3 = Color3.fromRGB(80, 80, 80)
+		end
+
+		-- Select this
+		if slot.nameLabel.Text ~= "" then
+			slot.frame.BackgroundColor3 = Color3.fromRGB(80, 120, 200)
+			slot.frame.BorderColor3 = Color3.fromRGB(100, 150, 255)
+			selectedSlot = i
+		end
+	end)
+end
+
+-- Create RemoteEvents in ReplicatedStorage (not creating new GUI)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local releaseEvent = ReplicatedStorage:FindFirstChild("ReleaseCreature")
+if not releaseEvent then
+	releaseEvent = Instance.new("RemoteEvent")
+	releaseEvent.Name = "ReleaseCreature"
+	releaseEvent.Parent = ReplicatedStorage
+end
+
+local inventoryCheckEvent = ReplicatedStorage:FindFirstChild("CheckInventorySpace")
+if not inventoryCheckEvent then
+	inventoryCheckEvent = Instance.new("RemoteFunction")
+	inventoryCheckEvent.Name = "CheckInventorySpace"
+	inventoryCheckEvent.Parent = ReplicatedStorage
+end
+
+-- Function to get inventory
+local function getInventory()
+	local inventory = player:FindFirstChild("CreatureInventory")
+	return inventory
+end
+
+-- Function to update inventory display
+local function updateInventory()
+	local inventory = getInventory()
+	if not inventory then 
+		print("No inventory found yet")
+		return 
+	end
+
+	print("Updating inventory display...")
+
+	-- Count creatures by type
+	local creatureCounts = {}
+	for _, creature in pairs(inventory:GetChildren()) do
+		if creature:IsA("Model") then
+			local name = creature.Name
+			creatureCounts[name] = (creatureCounts[name] or 0) + 1
+		end
+	end
+
+	-- Update slots
+	local slotIndex = 1
+	for name, count in pairs(creatureCounts) do
+		if slotIndex <= 5 then
+			slots[slotIndex].nameLabel.Text = name
+			slots[slotIndex].countLabel.Text = "x" .. count
+			slots[slotIndex].creatureName = name
+			slots[slotIndex].count = count
+
+			-- Color code based on count
+			if count >= 20 then
+				slots[slotIndex].countLabel.TextColor3 = Color3.fromRGB(255, 100, 100) -- Red when full
+			elseif count >= 15 then
+				slots[slotIndex].countLabel.TextColor3 = Color3.fromRGB(255, 200, 100) -- Orange when close
+			else
+				slots[slotIndex].countLabel.TextColor3 = Color3.fromRGB(200, 200, 200) -- Normal
+			end
+
+			slotIndex = slotIndex + 1
+		end
+	end
+
+	-- Clear remaining slots
+	for i = slotIndex, 5 do
+		slots[i].nameLabel.Text = ""
+		slots[i].countLabel.Text = ""
+		slots[i].creatureName = nil
+		slots[i].count = 0
+		slots[i].frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+		slots[i].frame.BorderColor3 = Color3.fromRGB(80, 80, 80)
+	end
+
+	-- Update info panel
+	if not infoScroll then return end
+
+	for _, child in pairs(infoScroll:GetChildren()) do
+		if child:IsA("TextLabel") then
+			child:Destroy()
+		end
+	end
+
+	for name, count in pairs(creatureCounts) do
+		local infoLabel = Instance.new("TextLabel")
+		infoLabel.Size = UDim2.new(1, -10, 0, 40)
+		infoLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+		infoLabel.BorderSizePixel = 0
+		infoLabel.Text = name .. ": " .. count .. " / 20"
+		infoLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		infoLabel.TextSize = 16
+		infoLabel.Font = Enum.Font.Gotham
+		infoLabel.Parent = infoScroll
+
+		local labelCorner = Instance.new("UICorner")
+		labelCorner.CornerRadius = UDim.new(0, 6)
+		labelCorner.Parent = infoLabel
+	end
+end
+
+-- Check if we can capture a creature
+inventoryCheckEvent.OnClientInvoke = function(creatureName)
+	local inventory = getInventory()
+	if not inventory then return true end
+
+	-- Count creatures by type
+	local creatureCounts = {}
+	local uniqueTypes = 0
+
+	for _, creature in pairs(inventory:GetChildren()) do
+		if creature:IsA("Model") then
+			local name = creature.Name
+			if not creatureCounts[name] then
+				uniqueTypes = uniqueTypes + 1
+				creatureCounts[name] = 0
+			end
+			creatureCounts[name] = creatureCounts[name] + 1
+		end
+	end
+
+	-- Check if this creature type already exists
+	if creatureCounts[creatureName] then
+		-- Can't capture if we have 20 of this type
+		if creatureCounts[creatureName] >= 20 then
+			return false, "Already have 20 " .. creatureName .. "s!"
+		end
+	else
+		-- Can't capture if we have 5 unique types
+		if uniqueTypes >= 5 then
+			return false, "Inventory full! (5 unique types max)"
+		end
+	end
+
+	return true
+end
+
+-- Toggle info panel with T
+local UserInputService = game:GetService("UserInputService")
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.T then
+		infoFrame.Visible = not infoFrame.Visible
+		if infoFrame.Visible then
+			updateInventory()
+		end
+	end
+
+	-- Press Q to release creature
+	if input.KeyCode == Enum.KeyCode.Q and selectedSlot and slots[selectedSlot].creatureName then
+		releaseEvent:FireServer(slots[selectedSlot].creatureName)
+		task.wait(0.1)
+	end
+end)
+
+-- Hold Q to spam release
+local isHoldingQ = false
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Enum.KeyCode.Q then
+		isHoldingQ = true
+		task.spawn(function()
+			while isHoldingQ and selectedSlot and slots[selectedSlot].creatureName do
+				releaseEvent:FireServer(slots[selectedSlot].creatureName)
+				updateInventory()
+				task.wait(0.2)
+			end
+		end)
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.KeyCode == Enum.KeyCode.Q then
+		isHoldingQ = false
+	end
+end)
+
+-- Watch for inventory changes - wait for folder to be created by server
+task.spawn(function()
+	local inventory = player:WaitForChild("CreatureInventory", 30)
+	if inventory then
+		print("Found CreatureInventory folder, setting up listeners")
+
+		inventory.ChildAdded:Connect(function(child)
+			print("Creature added to inventory:", child.Name)
+			updateInventory()
+		end)
+
+		inventory.ChildRemoved:Connect(function(child)
+			print("Creature removed from inventory:", child.Name)
+			updateInventory()
+		end)
+
+		-- Do initial update in case creatures were already there
+		updateInventory()
+	else
+		warn("CreatureInventory folder not found after 30 seconds")
+	end
+end)
+
+-- Also update inventory every second as a backup
+task.spawn(function()
+	while task.wait(1) do
+		local inventory = player:FindFirstChild("CreatureInventory")
+		if inventory and #inventory:GetChildren() > 0 then
+			updateInventory()
+		end
+	end
+end)
+
