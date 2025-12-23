@@ -1,0 +1,109 @@
+local creature = script.Parent
+local humanoid = creature:WaitForChild("Humanoid")
+local rootPart = creature:WaitForChild("HumanoidRootPart")
+
+
+--[[if not creature:FindFirstChild("Capturable") then
+	local capturable = Instance.new("BoolValue")
+	capturable.Name = "Capturable"
+	capturable.Parent = creature
+end]]
+
+
+script.Name = "WanderScript"
+
+rootPart.CFrame = CFrame.new(rootPart.Position) * CFrame.Angles(0, 0, 0)
+rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+
+-- Configuration
+local WANDER_RADIUS = 50 -- How far the creature can wander from its spawn point
+local MIN_WAIT_TIME = 2 -- Minimum seconds to wait before moving again
+local MAX_WAIT_TIME = 5 -- Maximum seconds to wait before moving again
+local WALK_SPEED = 8 -- Movement speed
+
+-- Animation setup
+local walkAnimationId = "rbxassetid://101882523572280"
+local idleAnimationId = "rbxassetid://82425185768166"
+
+local walkAnim = Instance.new("Animation")
+walkAnim.AnimationId = walkAnimationId
+
+local idleAnim = Instance.new("Animation")
+idleAnim.AnimationId = idleAnimationId
+
+local animator = humanoid:FindFirstChildOfClass("Animator")
+if not animator then
+	animator = Instance.new("Animator")
+	animator.Parent = humanoid
+end
+
+local walkTrack = animator:LoadAnimation(walkAnim)
+local idleTrack = animator:LoadAnimation(idleAnim)
+
+-- Store the spawn position
+local spawnPosition = rootPart.Position
+
+-- Set walk speed
+humanoid.WalkSpeed = WALK_SPEED
+
+-- Start with idle animation
+if not idleTrack.IsPlaying then
+	idleTrack:Play()
+end
+
+-- Function to get a random position within wander radius
+local function getRandomPosition()
+	local angle = math.random() * math.pi * 2
+	local distance = math.random() * WANDER_RADIUS
+
+	local x = spawnPosition.X + math.cos(angle) * distance
+	local z = spawnPosition.Z + math.sin(angle) * distance
+
+	return Vector3.new(x, spawnPosition.Y, z)
+end
+
+-- Function to move to a random position
+local function wanderRandomly()
+	local targetPosition = getRandomPosition()
+
+	-- Stop idle, play walking animation
+	if idleTrack.IsPlaying then
+		idleTrack:Stop()
+	end
+	if not walkTrack.IsPlaying then
+		walkTrack:Play()
+	end
+
+	-- Move to target
+	humanoid:MoveTo(targetPosition)
+	
+
+	-- Wait for movement to complete or timeout after 10 seconds
+	local moveComplete = false
+	local timeoutTask = task.delay(10, function()
+		moveComplete = true
+	end)
+
+	humanoid.MoveToFinished:Wait()
+
+	-- Cancel timeout if we reached destination
+	task.cancel(timeoutTask)
+
+	-- Stop walking, play idle animation
+	if walkTrack.IsPlaying then
+		walkTrack:Stop()
+	end
+	if not idleTrack.IsPlaying then
+		idleTrack:Play()
+	end
+end
+
+-- Main wander loop
+while task.wait(math.random(MIN_WAIT_TIME, MAX_WAIT_TIME)) do
+	if humanoid.Health > 0 then
+		wanderRandomly()
+	else
+		break
+	end
+end
